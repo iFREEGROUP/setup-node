@@ -62,62 +62,16 @@ export default class OfficialBuilds extends BaseDistribution {
     if (toolPath) {
       core.info(`Found in cache @ ${toolPath}`);
     } else {
-      let downloadPath = '';
-      try {
-        core.info(`Attempting to download ${this.nodeInfo.versionSpec}...`);
-
-        const versionInfo = await this.getInfoFromManifest(
-          this.nodeInfo.versionSpec,
-          this.nodeInfo.stable,
-          osArch,
-          manifest
+      const nodeJsVersions = await this.getNodeJsVersions();
+      const versions = this.filterVersions(nodeJsVersions);
+      const evaluatedVersion = this.evaluateVersions(versions);
+      if (!evaluatedVersion) {
+        throw new Error(
+          `Unable to find Node version '${this.nodeInfo.versionSpec}' for platform ${this.osPlat} and architecture ${this.nodeInfo.arch}.`
         );
-        if (versionInfo) {
-          core.info(
-            `Acquiring ${versionInfo.resolvedVersion} - ${versionInfo.arch} from ${versionInfo.downloadUrl}`
-          );
-          downloadPath = await tc.downloadTool(
-            versionInfo.downloadUrl,
-            undefined,
-            this.nodeInfo.auth
-          );
-
-          if (downloadPath) {
-            toolPath = await this.extractArchive(downloadPath, versionInfo);
-          }
-        } else {
-          core.info(
-            'Not found in manifest. Falling back to download directly from Node'
-          );
-        }
-      } catch (err) {
-        // Rate limit?
-        if (
-          err instanceof tc.HTTPError &&
-          (err.httpStatusCode === 403 || err.httpStatusCode === 429)
-        ) {
-          core.info(
-            `Received HTTP status code ${err.httpStatusCode}. This usually indicates the rate limit has been exceeded`
-          );
-        } else {
-          core.info(err.message);
-        }
-        core.debug(err.stack);
-        core.info('Falling back to download directly from Node');
       }
-
-      if (!toolPath) {
-        const nodeJsVersions = await this.getNodeJsVersions();
-        const versions = this.filterVersions(nodeJsVersions);
-        const evaluatedVersion = this.evaluateVersions(versions);
-        if (!evaluatedVersion) {
-          throw new Error(
-            `Unable to find Node version '${this.nodeInfo.versionSpec}' for platform ${this.osPlat} and architecture ${this.nodeInfo.arch}.`
-          );
-        }
-        const toolName = this.getNodejsDistInfo(evaluatedVersion);
-        toolPath = await this.downloadNodejs(toolName);
-      }
+      const toolName = this.getNodejsDistInfo(evaluatedVersion);
+      toolPath = await this.downloadNodejs(toolName);
     }
 
     if (this.osPlat != 'win32') {
@@ -141,7 +95,7 @@ export default class OfficialBuilds extends BaseDistribution {
   }
 
   protected getDistributionUrl(): string {
-    return `https://nodejs.org/dist`;
+    return `https://registry.npmmirror.com/-/binary/node`;
   }
 
   private getManifest(): Promise<tc.IToolRelease[]> {
